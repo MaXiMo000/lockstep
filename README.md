@@ -77,6 +77,23 @@ appears in a partial file) reports as `extra` -- correct, technically, but
 noise that drowns the real signal. That's a lockfile-completeness problem
 this tool surfaces, not a bug in it.
 
+## Not the same question as `pip check`
+
+`pip check` already ships with pip, and answers the obvious first
+question: are the packages *currently installed* internally consistent
+with each other's own declared requirements (nothing needs `foo>=2.0`
+while `foo 1.0` is what's actually there)? It never reads a lockfile at
+all -- it can't tell you whether reality matches what you *intended* to
+have installed, only whether what's installed is self-consistent right
+now. An environment can pass `pip check` cleanly while still being three
+versions behind its own lockfile, or running a hotfixed package the
+lockfile has never heard of -- exactly lockstep's `extra` case, above.
+
+The two are complementary, not competing: `pip check` catches a broken
+dependency graph; `lockstep check` catches drift from your own declared
+source of truth. Worth running both -- neither substitutes for the
+other, and `pip check` costs nothing extra since it's already there.
+
 ## What this does NOT do
 
 - **Python only, via `pip`/PyPI metadata.** `carabiner`'s own `deps.py`
