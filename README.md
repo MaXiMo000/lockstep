@@ -15,15 +15,27 @@ at commit time can't see drift that happens after deploy; this is built
 specifically to.
 
 ```
-$ lockstep check requirements.lock
-[!=] 'click' is pinned to 8.0.0 but 8.1.3 is installed
-[--] 'requests' is pinned to 2.31.0 but is not installed
-[++] 'pip' 24.0 is installed but not declared anywhere in the lockfile
+$ lockstep check requirements.lock --quiet-matched
+[!=] 'click' is pinned to 8.1.8 but 8.1.7 is installed
+[--] 'requests' is pinned to 2.32.3 but is not installed
+[++] 'six' 1.16.0 is installed but not declared anywhere in the lockfile
 
-0/3 matched, 3 drifted
+3/6 matched, 3 drifted
 ```
 
-(Real output, from a real venv.)
+And the drift a version number can't show -- installed code that was
+edited in place after install:
+
+```
+$ lockstep verify
+[!=] click 8.1.7: click/core.py was modified after install
+
+5/6 package(s) intact, 529 file(s) checked
+```
+
+(Both real output, from a real venv. The lockfile also pinned
+`uvloop ; sys_platform != "win32"` -- correctly not expected on the
+Windows machine this ran on, so not reported missing.)
 
 ## Install
 
@@ -47,6 +59,28 @@ It reads the *running interpreter's own* installed-package metadata
 (`importlib.metadata`, stdlib, no subprocess) and compares it against the
 lockfile. `--json` prints the full machine-readable report; `--quiet-matched`
 hides packages that already match, showing only drift.
+
+## `lockstep verify`: was installed code edited in place?
+
+Every wheel install writes a `RECORD` -- each file it put down, with its
+sha256. pip writes it and never reads it again. So a file in
+site-packages hand-patched on a live server, "fixed" during a debugging
+session and left that way, or tampered with after install still reports
+the same version to pip, to `pip freeze`, and to `lockstep check`. The
+version string didn't change; the code did.
+
+`lockstep verify` re-hashes every installed file against its own `RECORD`
+entry and names each one that's **modified** or **missing**. `lockstep
+verify requests urllib3` checks just those. It's fast -- hashing is the
+only work (about 500 files in well under a second here) -- so it fits in
+a container's startup or a deploy's health check. A package installed
+without a `RECORD` (a legacy egg-style editable install) is listed as
+uncheckable, never counted as intact.
+
+What it doesn't prove: that the *original* install was the real package.
+A `RECORD` is written by whoever installed it; if that install came from a
+compromised index, it'll describe the compromised files faithfully. Pair
+it with hash-pinned installs (`pip install --require-hashes`) for that.
 
 ## Three kinds of drift, not one
 
@@ -74,16 +108,27 @@ your lockfile does pin one of them, it's checked like anything else.
 Exit code is `1` if anything drifted, `0` if every declared package
 matches.
 
-## What this assumes
+## Lockfile formats
 
-**A fully-pinned lockfile** -- the output of `pip freeze`, `pip-compile`,
-or `poetry export`, every direct *and transitive* dependency pinned to an
-exact version. Not a hand-written `requirements.txt` listing only your
-own top-level packages. If you point this at a partial file, every
-transitive dependency pip installed on its own behalf (which never
-appears in a partial file) reports as `extra` -- correct, technically, but
-noise that drowns the real signal. That's a lockfile-completeness problem
-this tool surfaces, not a bug in it.
+- **requirements-style** (`pip freeze`, `pip-compile`, `uv pip compile`,
+  `poetry export`): `==`/`===` pins, extras, hashes, and environment
+  markers -- a pin whose marker doesn't hold here (`colorama ;
+  sys_platform == "win32"` on Linux) isn't expected, so it's never a false
+  "missing".
+- **`pylock.toml`** (PEP 751, the standard lockfile format), with
+  per-package markers.
+- **`Pipfile.lock`**: the `default` packages, i.e. what `pipenv install
+  --deploy` puts in production.
+- **`uv.lock` / `poetry.lock`** aren't read directly -- their platform
+  markers live on dependency edges, so every platform-specific package
+  would read as missing elsewhere. lockstep tells you the export command
+  instead: `uv export --format pylock.toml`, or `poetry export -f
+  requirements.txt`.
+
+The lockfile must be **fully pinned**: every direct *and transitive*
+dependency, the way all of the above produce it. A hand-written
+`requirements.txt` listing only top-level packages makes every transitive
+dependency read as `extra` -- correct, technically, but noise.
 
 ## Not the same question as `pip check`
 
@@ -128,6 +173,7 @@ python tests/test_parse.py       # lockfile parsing -- extras, ===, hashes, mark
 python tests/test_installed.py   # reads THIS interpreter's real installed packages
 python tests/test_check.py       # matched/version_mismatch/missing/extra classification
 python tests/test_cli.py         # the real CLI, against this real environment
+python tests/test_verify.py      # RECORD verification, pylock.toml, Pipfile.lock, markers
 ```
 
 35 tests. Several exist because testing against real `pip-compile` output

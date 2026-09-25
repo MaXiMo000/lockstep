@@ -3,7 +3,7 @@
 # this portfolio. The installed command stays the short name --
 # python-dateutil installs `dateutil`, this installs `lockstep`.
 name = "lockstep-evidence"
-version = "0.1.1"
+version = "0.2.0"
 description = "Does what's actually installed match the lockfile? Runtime dependency drift, not just a commit-time CVE scan."
 requires-python = ">=3.10"
 readme = "README.md"
@@ -21,8 +21,9 @@ classifiers = [
 ]
 # importlib.metadata (stdlib) reads what's installed. `packaging` is the
 # reference PEP 440 implementation pip itself vendors: "1.0" == "1.0.0"
-# is not something a string compare can answer.
-dependencies = ["packaging>=22"]
+# is not something a string compare can answer. tomli reads pylock.toml
+# on Python 3.10, before tomllib joined the stdlib.
+dependencies = ["packaging>=22", "tomli>=1.1; python_version < '3.11'"]
 
 urls.Homepage = "https://github.com/MaXiMo000/lockstep"
 urls.Source = "https://github.com/MaXiMo000/lockstep"
