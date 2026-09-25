@@ -3,7 +3,7 @@
 # this portfolio. The installed command stays the short name --
 # python-dateutil installs `dateutil`, this installs `lockstep`.
 name = "lockstep-evidence"
-version = "0.1.0"
+version = "0.1.1"
 description = "Does what's actually installed match the lockfile? Runtime dependency drift, not just a commit-time CVE scan."
 requires-python = ">=3.10"
 readme = "README.md"
@@ -19,9 +19,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: System :: Systems Administration",
 ]
-# Stdlib only -- importlib.metadata reads the running interpreter's own
-# installed-package data directly, no subprocess or extra parser needed.
-dependencies = []
+# importlib.metadata (stdlib) reads what's installed. `packaging` is the
+# reference PEP 440 implementation pip itself vendors: "1.0" == "1.0.0"
+# is not something a string compare can answer.
+dependencies = ["packaging>=22"]
 
 urls.Homepage = "https://github.com/MaXiMo000/lockstep"
 urls.Source = "https://github.com/MaXiMo000/lockstep"
