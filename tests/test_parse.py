@@ -53,6 +53,10 @@ class TestParseLockfile(unittest.TestCase):
         result = parse_lockfile("requests[security]==2.31.0\n")
         self.assertEqual(result["pinned"], {"requests": "2.31.0"})
 
+    def test_arbitrary_equality_pins_are_recorded_as_such(self):
+        result = parse_lockfile("attrs===23.1.0\nclick==8.1.3\n")
+        self.assertEqual(result["arbitrary"], ["attrs"])
+
     def test_arbitrary_equality_operator_is_not_mangled(self):
         """attrs===23.1.0 -- PEP 440's arbitrary-equality operator. A regex
         matching a bare '==' first would eat two of its three '=' and
@@ -77,7 +81,7 @@ class TestParseLockfile(unittest.TestCase):
 
     def test_empty_file_is_nothing_not_an_error(self):
         result = parse_lockfile("")
-        self.assertEqual(result, {"pinned": {}, "unpinned": []})
+        self.assertEqual(result, {"pinned": {}, "unpinned": [], "arbitrary": []})
 
     def test_a_realistic_mixed_file(self):
         text = (

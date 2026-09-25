@@ -1,5 +1,5 @@
 """Parse a pinned requirements.txt-style lockfile into
-{"pinned": {name: version}, "unpinned": [name, ...]}.
+{"pinned": {name: version}, "unpinned": [name, ...], "arbitrary": [name, ...]}.
 
 Only an exact pin (`package==1.2.3`) declares a single version runtime
 could drift from -- a range (`package>=1.0`) or a bare name doesn't, so
@@ -28,7 +28,7 @@ from .names import normalize
 _PIN = re.compile(
     r'^([A-Za-z0-9][A-Za-z0-9._-]*)'   # name
     r'(?:\[[^\]]*\])?'                  # optional extras, e.g. [security]
-    r'\s*(?:===|==)\s*'                  # PEP 440 arbitrary-equality (===) tried
+    r'\s*(===|==)\s*'                    # PEP 440 arbitrary-equality (===) tried
     r'([^\s;#]+)'                       # first, or == would eat two of its three '='
 )
 _RANGE_OP = re.compile(
@@ -40,6 +40,7 @@ _BARE_NAME = re.compile(r'^([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*$')
 def parse_lockfile(text: str) -> dict:
     pinned: dict[str, str] = {}
     unpinned: list[str] = []
+    arbitrary: list[str] = []  # `===` pins: exact string match, no PEP 440 normalization
 
     for raw_line in text.splitlines():
         # Environment markers and inline comments both trail after the
@@ -51,8 +52,10 @@ def parse_lockfile(text: str) -> dict:
 
         m = _PIN.match(line)
         if m:
-            name, version = m.groups()
+            name, op, version = m.groups()
             pinned[normalize(name)] = version
+            if op == "===":
+                arbitrary.append(normalize(name))
             continue
 
         m = _RANGE_OP.match(line)
@@ -64,4 +67,4 @@ def parse_lockfile(text: str) -> dict:
         if m:
             unpinned.append(normalize(m.group(1)))
 
-    return {"pinned": pinned, "unpinned": unpinned}
+    return {"pinned": pinned, "unpinned": unpinned, "arbitrary": arbitrary}

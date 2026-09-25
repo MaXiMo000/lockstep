@@ -63,8 +63,16 @@ outliving the deploy that was supposed to make it official. A commit-time
 scan of the lockfile alone can never see this -- by the time it exists,
 the running environment and the committed lockfile have already diverged.
 
+Versions are compared the way pip compares them (PEP 440, via
+`packaging`): `1.0` and `1.0.0` match, and so do `2.0RC1` and `2.0rc1`. A
+`===` pin is the exception PEP 440 defines: exact string equality.
+
+`pip`, `setuptools`, `wheel` and `distribute` are never reported as
+`extra`, because `pip freeze` leaves them out of the lockfile it writes. If
+your lockfile does pin one of them, it's checked like anything else.
+
 Exit code is `1` if anything drifted, `0` if every declared package
-matches exactly.
+matches.
 
 ## What this assumes
 

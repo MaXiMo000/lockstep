@@ -52,6 +52,23 @@ class TestCheckDrift(unittest.TestCase):
         results = check_drift(lockfile, installed)
         self.assertEqual(results, [])
 
+    def test_pep440_equal_versions_match_even_when_spelled_differently(self):
+        # Regression: compared as strings, "1.0" vs "1.0.0" read as drift.
+        for locked, installed in [("1.0", "1.0.0"), ("2.0RC1", "2.0rc1"), ("1.0.post0", "1.0.post0")]:
+            lockfile = {"pinned": {"x": locked}, "unpinned": []}
+            status = check_drift(lockfile, {"x": installed})[0]["status"]
+            self.assertEqual(status, MATCHED, (locked, installed))
+
+    def test_arbitrary_equality_pin_is_an_exact_string_match(self):
+        lockfile = {"pinned": {"x": "1.0"}, "unpinned": [], "arbitrary": ["x"]}
+        self.assertEqual(check_drift(lockfile, {"x": "1.0.0"})[0]["status"], VERSION_MISMATCH)
+
+    def test_tooling_pip_freeze_omits_is_not_extra_but_is_checked_when_pinned(self):
+        lockfile = {"pinned": {"setuptools": "70.0.0"}, "unpinned": []}
+        results = check_drift(lockfile, {"pip": "25.0", "wheel": "0.43", "setuptools": "69.0.0"})
+        self.assertEqual([(r["name"], r["status"]) for r in results],
+                         [("setuptools", VERSION_MISMATCH)])
+
     def test_names_normalized_on_both_sides_still_match(self):
         lockfile = {"pinned": {"flask-login": "0.6.2"}, "unpinned": []}
         installed = {"flask-login": "0.6.2"}  # already normalized, as installed_packages() gives it
