@@ -7,7 +7,7 @@ import json
 import sys
 
 from .check import EXTRA, MATCHED, MISSING, VERSION_MISMATCH, check_drift
-from .installed import installed_packages
+from .installed import installed_packages, probe
 from .names import normalize
 from .parse import LockfileError, parse_file
 from .verify import verify_installed
@@ -16,11 +16,22 @@ _TAG = {MATCHED: "OK", VERSION_MISMATCH: "!=", MISSING: "--", EXTRA: "++"}
 
 
 def _check(args) -> int:
+    from . import parse
+    if args.python:
+        try:
+            installed, parse.MARKER_ENV = probe(args.python)
+        except RuntimeError as exc:
+            sys.exit(f"lockstep: {exc}")
+    else:
+        # Checking from inside: lockstep itself is installed here, and it is
+        # not drift. Its dependencies still count if the lockfile names them.
+        installed = installed_packages()
+        installed.pop("lockstep-evidence", None)
     try:
-        lockfile = parse_file(args.lockfile)
+        lockfile = parse_file(args.lockfile, args.group, args.extra)
     except (OSError, UnicodeDecodeError, LockfileError) as exc:
         sys.exit(f"lockstep: {exc}")
-    results = check_drift(lockfile, installed_packages())
+    results = check_drift(lockfile, installed)
 
     if args.json:
         print(json.dumps(results, indent=2))
@@ -69,7 +80,15 @@ def main(argv: list[str] | None = None) -> int:
 
     check_p = sub.add_parser(
         "check", help="compare this environment's installed packages against a pinned lockfile")
-    check_p.add_argument("lockfile", help="requirements-style lockfile, pylock.toml, or Pipfile.lock")
+    check_p.add_argument("lockfile",
+                         help="uv.lock, pylock.toml, Pipfile.lock, or a requirements-style lockfile")
+    check_p.add_argument("--group", action="append", default=[], metavar="NAME",
+                         help="uv.lock: also expect this dependency group, e.g. dev (repeatable)")
+    check_p.add_argument("--extra", action="append", default=[], metavar="NAME",
+                         help="uv.lock: also expect the project's extra NAME (repeatable)")
+    check_p.add_argument("--python", metavar="PATH",
+                         help="check that interpreter's environment (e.g. .venv/bin/python) "
+                              "instead of the one lockstep runs in")
     check_p.add_argument("--json", action="store_true", help="print the full report as JSON")
     check_p.add_argument("--quiet-matched", action="store_true",
                          help="only print drift, not every package that already matches")
