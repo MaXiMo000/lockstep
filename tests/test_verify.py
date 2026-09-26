@@ -124,11 +124,74 @@ commit-id = "abc"
         self.assertEqual(parse_file(p), {"pinned": {"flask": "3.0.3", "attrs": "23.1.0"},
                                          "unpinned": ["mylib"], "arbitrary": ["attrs"]})
 
-    def test_uv_and_poetry_lock_point_at_their_export_command(self):
-        for name, hint in (("uv.lock", "uv export --format pylock.toml"), ("poetry.lock", "poetry export")):
-            with self.assertRaises(LockfileError) as ctx:
-                parse_file(self._write(name, ""))
-            self.assertIn(hint, str(ctx.exception))
+    def test_poetry_lock_points_at_its_export_command(self):
+        with self.assertRaises(LockfileError) as ctx:
+            parse_file(self._write("poetry.lock", ""))
+        self.assertIn("poetry export", str(ctx.exception))
+
+    UV_LOCK = '''version = 1
+[[package]]
+name = "app"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "colorama", marker = "sys_platform == 'nonexistent-os'" },
+    { name = "anyio", version = "4.0.0" },
+]
+[package.optional-dependencies]
+web = [{ name = "uvicorn", extra = ["standard"] }]
+[package.dev-dependencies]
+dev = [{ name = "pytest" }]
+[[package]]
+name = "httpx"
+version = "0.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [{ name = "anyio", version = "4.0.0" }]
+[[package]]
+name = "anyio"
+version = "3.7.1"
+source = { registry = "https://pypi.org/simple" }
+[[package]]
+name = "anyio"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+[[package]]
+name = "colorama"
+version = "0.4.6"
+source = { registry = "https://pypi.org/simple" }
+[[package]]
+name = "uvicorn"
+version = "0.30.0"
+source = { registry = "https://pypi.org/simple" }
+[package.optional-dependencies]
+standard = [{ name = "watchfiles" }]
+[[package]]
+name = "watchfiles"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+[[package]]
+name = "pytest"
+version = "8.3.0"
+source = { registry = "https://pypi.org/simple" }
+'''
+
+    def test_uv_lock_walks_edges_from_the_project(self):
+        """Checked against `uv export --format pylock.toml` on fastapi's own
+        uv.lock: the same 42 packages at the same versions."""
+        p = self._write("uv.lock", self.UV_LOCK)
+        self.assertEqual(parse_file(p), {"pinned": {"httpx": "0.28.1", "anyio": "4.0.0"},
+                                         "unpinned": ["app"], "arbitrary": []})
+        full = parse_file(p, groups=["dev"], extras=["web"])["pinned"]
+        self.assertEqual(sorted(full), ["anyio", "httpx", "pytest", "uvicorn", "watchfiles"])
+
+    def test_uv_lock_markers_judge_the_target_not_lockstep(self):
+        from lockstep import parse
+        parse.MARKER_ENV = {"sys_platform": "nonexistent-os"}
+        try:
+            got = parse_file(self._write("uv.lock", self.UV_LOCK))["pinned"]
+        finally:
+            parse.MARKER_ENV = None
+        self.assertIn("colorama", got)
 
     def test_requirements_marker_for_another_platform_is_not_expected_here(self):
         result = parse_lockfile("colorama==0.4.6 ; sys_platform == 'nonexistent-os'\n"

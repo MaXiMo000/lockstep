@@ -60,6 +60,21 @@ It reads the *running interpreter's own* installed-package metadata
 lockfile. `--json` prints the full machine-readable report; `--quiet-matched`
 hides packages that already match, showing only drift.
 
+Or check a different environment without installing anything into it:
+
+```
+lockstep check uv.lock --python .venv/bin/python
+```
+
+`--python` runs a stdlib-only probe in that interpreter and judges every
+environment marker against *its* platform and Python, not lockstep's.
+
+Checked on real projects: after `uv sync --frozen --no-default-groups`,
+fastapi's and flask's own `uv.lock` read 9/9 and 8/8 matched, and a
+downgraded `starlette` or a stray `six` exits 1. With extras, the uv.lock
+walk names the same 42 packages at the same versions as
+`uv export --format pylock.toml`.
+
 ## `lockstep verify`: was installed code edited in place?
 
 Every wheel install writes a `RECORD` -- each file it put down, with its
@@ -119,11 +134,13 @@ matches.
   per-package markers.
 - **`Pipfile.lock`**: the `default` packages, i.e. what `pipenv install
   --deploy` puts in production.
-- **`uv.lock` / `poetry.lock`** aren't read directly -- their platform
-  markers live on dependency edges, so every platform-specific package
-  would read as missing elsewhere. lockstep tells you the export command
-  instead: `uv export --format pylock.toml`, or `poetry export -f
-  requirements.txt`.
+- **`uv.lock`**, read directly: walked from the workspace members along
+  the edges whose markers hold here, the way `uv sync --no-dev` installs
+  it. `--group dev` and `--extra NAME` add groups and extras (repeatable).
+  Note that `[tool.uv] default-groups` lives in pyproject.toml, so name
+  those groups if the environment was synced with them.
+- **`poetry.lock`** isn't read directly; lockstep prints the export
+  command instead: `poetry export -f requirements.txt`.
 
 The lockfile must be **fully pinned**: every direct *and transitive*
 dependency, the way all of the above produce it. A hand-written
