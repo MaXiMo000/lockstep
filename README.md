@@ -69,6 +69,26 @@ lockstep check uv.lock --python .venv/bin/python
 `--python` runs a stdlib-only probe in that interpreter and judges every
 environment marker against *its* platform and Python, not lockstep's.
 
+A container image works the same way, with nothing installed into it:
+
+```
+$ lockstep check requirements.lock --image myapp:latest
+[!=] 'starlette' is pinned to 1.6.0 but 0.40.0 is installed
+[++] 'six' 1.17.0 is installed but not declared anywhere in the lockfile
+
+8/10 matched, 2 drifted
+```
+
+(Real output: an image built from fastapi's own locked requirements, then
+one built on top of it with a downgrade and a stray package. The clean
+image reads 9/9.) `--image` runs the probe with `docker run --rm
+--network none`, trying `python3` then `python`.
+
+The probe ignores the working directory: `python -c` puts it on
+`sys.path`, and a source checkout's stray `*.egg-info` there used to read
+as an installed package -- caught when lockstep reported itself "installed"
+in a venv it had never been installed into.
+
 Checked on real projects: after `uv sync --frozen --no-default-groups`,
 fastapi's and flask's own `uv.lock` read 9/9 and 8/8 matched, and a
 downgraded `starlette` or a stray `six` exits 1. With extras, the uv.lock
@@ -139,6 +159,13 @@ matches.
   it. `--group dev` and `--extra NAME` add groups and extras (repeatable).
   Note that `[tool.uv] default-groups` lives in pyproject.toml, so name
   those groups if the environment was synced with them.
+- **An SBOM** (CycloneDX or SPDX JSON, any `*.json`): the `pkg:pypi/...`
+  packages it lists, so the question becomes "is this environment what our
+  SBOM says?". OS and npm packages in the same SBOM are not this check's
+  business. A Python-only CycloneDX SBOM's local installs (no package URL)
+  are expected present, version unchecked -- that is how `cyclonedx-py
+  environment` records an editable project. Checked against a real
+  `cyclonedx-py` SBOM of fastapi's environment: 9/9.
 - **`poetry.lock`** isn't read directly; lockstep prints the export
   command instead: `poetry export -f requirements.txt`.
 

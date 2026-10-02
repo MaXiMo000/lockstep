@@ -124,6 +124,32 @@ commit-id = "abc"
         self.assertEqual(parse_file(p), {"pinned": {"flask": "3.0.3", "attrs": "23.1.0"},
                                          "unpinned": ["mylib"], "arbitrary": ["attrs"]})
 
+    def test_cyclonedx_and_spdx_sboms(self):
+        """Shapes from cyclonedx-py 'environment' and an SPDX 2.3 export:
+        only pkg:pypi packages count; a local install (no purl) in a
+        Python-only SBOM is expected present, version unchecked."""
+        cdx = {"bomFormat": "CycloneDX", "specVersion": "1.6", "components": [
+            {"type": "library", "name": "starlette", "version": "1.6.0", "purl": "pkg:pypi/starlette@1.6.0"},
+            {"type": "library", "name": "Typing_Extensions", "version": "4.16.0",
+             "purl": "pkg:pypi/typing-extensions@4.16.0?extension=whl"},
+            {"type": "library", "name": "fastapi", "version": "0.141.1"}]}
+        self.assertEqual(parse_file(self._write("app.cdx.json", json.dumps(cdx))),
+                         {"pinned": {"starlette": "1.6.0", "typing-extensions": "4.16.0"},
+                          "unpinned": ["fastapi"], "arbitrary": []})
+        mixed = dict(cdx, components=cdx["components"] + [
+            {"type": "library", "name": "left-pad", "purl": "pkg:npm/left-pad@1.3.0"}])
+        self.assertEqual(parse_file(self._write("mixed.json", json.dumps(mixed)))["unpinned"], [])
+        spdx = {"spdxVersion": "SPDX-2.3", "packages": [
+            {"name": "requests", "versionInfo": "2.32.3", "externalRefs": [
+                {"referenceCategory": "PACKAGE-MANAGER", "referenceType": "purl",
+                 "referenceLocator": "pkg:pypi/requests@2.32.3"}]},
+            {"name": "openssl", "externalRefs": [
+                {"referenceType": "purl", "referenceLocator": "pkg:deb/debian/openssl@3.0.15"}]}]}
+        self.assertEqual(parse_file(self._write("bom.spdx.json", json.dumps(spdx)))["pinned"],
+                         {"requests": "2.32.3"})
+        with self.assertRaises(LockfileError):
+            parse_file(self._write("package.json", '{"name": "web"}'))
+
     def test_poetry_lock_points_at_its_export_command(self):
         with self.assertRaises(LockfileError) as ctx:
             parse_file(self._write("poetry.lock", ""))

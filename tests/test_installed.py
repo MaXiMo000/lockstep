@@ -38,5 +38,26 @@ class TestInstalledPackages(unittest.TestCase):
             self.assertIsInstance(version, str)
 
 
+class TestProbeIgnoresTheWorkingDirectory(unittest.TestCase):
+    def test_a_stray_egg_info_in_cwd_is_not_installed(self):
+        """Seen live: a source checkout's lockstep_evidence.egg-info read as
+        an installed package, because `python -c` puts cwd on sys.path."""
+        import os
+        import tempfile
+        from lockstep.installed import probe
+        with tempfile.TemporaryDirectory() as tmp:
+            info = pathlib.Path(tmp) / "phantom_pkg.egg-info"
+            info.mkdir()
+            (info / "PKG-INFO").write_text("Metadata-Version: 2.1\nName: phantom-pkg\nVersion: 9.9\n",
+                                           encoding="utf-8")
+            here = os.getcwd()
+            os.chdir(tmp)
+            try:
+                installed, _ = probe(sys.executable)
+            finally:
+                os.chdir(here)
+        self.assertNotIn("phantom-pkg", installed)
+
+
 if __name__ == "__main__":
     unittest.main()

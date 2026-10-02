@@ -7,7 +7,7 @@ import json
 import sys
 
 from .check import EXTRA, MATCHED, MISSING, VERSION_MISMATCH, check_drift
-from .installed import installed_packages, probe
+from .installed import installed_packages, probe, probe_image
 from .names import normalize
 from .parse import LockfileError, parse_file
 from .verify import verify_installed
@@ -17,9 +17,12 @@ _TAG = {MATCHED: "OK", VERSION_MISMATCH: "!=", MISSING: "--", EXTRA: "++"}
 
 def _check(args) -> int:
     from . import parse
-    if args.python:
+    if args.python and args.image:
+        sys.exit("lockstep: --python and --image both name an environment; give one")
+    if args.python or args.image:
         try:
-            installed, parse.MARKER_ENV = probe(args.python)
+            installed, parse.MARKER_ENV = (probe_image(args.image) if args.image
+                                           else probe(args.python))
         except RuntimeError as exc:
             sys.exit(f"lockstep: {exc}")
     else:
@@ -89,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
     check_p.add_argument("--python", metavar="PATH",
                          help="check that interpreter's environment (e.g. .venv/bin/python) "
                               "instead of the one lockstep runs in")
+    check_p.add_argument("--image", metavar="IMAGE",
+                         help="check a container image (e.g. myapp:latest) without installing "
+                              "anything into it; needs docker")
     check_p.add_argument("--json", action="store_true", help="print the full report as JSON")
     check_p.add_argument("--quiet-matched", action="store_true",
                          help="only print drift, not every package that already matches")

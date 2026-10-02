@@ -28,6 +28,10 @@ def installed_packages() -> dict[str, str]:
 # against the environment being checked, not the one lockstep runs in.
 _PROBE = r'''
 import json, os, platform, sys
+# `python -c` puts the working directory on sys.path, so a stray
+# *.egg-info there -- a source checkout, an image's WORKDIR -- read as an
+# installed package. Only what the interpreter itself would load counts.
+sys.path[:] = [p for p in sys.path if p not in ("", ".", os.getcwd())]
 from importlib import metadata
 v = sys.implementation.version
 iv = "%d.%d.%d" % (v.major, v.minor, v.micro)
@@ -52,17 +56,37 @@ def probe(python: str) -> tuple[dict[str, str], dict[str, str]]:
     """(installed packages, marker environment) of another interpreter --
     a venv, or a container's python via a wrapper script -- so lockstep
     need not be installed in the environment it is checking."""
-    import json
     import os
     import shutil
-    import subprocess
     # A bare name is looked up on PATH; a relative path is made absolute,
     # because Windows will not launch `.venv/Scripts/python.exe` as given.
     python = shutil.which(python) or os.path.abspath(python)
+    return _run_probe([python], python)
+
+
+def probe_image(image: str) -> tuple[dict[str, str], dict[str, str]]:
+    """The same probe inside a container image: `docker run --rm` with no
+    network, nothing installed into it, nothing left behind. Tries python3,
+    then python -- slim images ship one or the other."""
+    errors = []
+    for exe in ("python3", "python"):
+        try:
+            return _run_probe(["docker", "run", "--rm", "--network", "none",
+                               "--entrypoint", exe, image], f"{image} ({exe})", timeout=300)
+        except RuntimeError as exc:
+            errors.append(str(exc))
+    raise RuntimeError("; ".join(errors))
+
+
+def _run_probe(prefix: list[str], label: str, timeout: int = 60):
+    import json
+    import subprocess
     try:
-        out = subprocess.run([python, "-c", _PROBE], capture_output=True, text=True,
-                             encoding="utf-8", timeout=60, check=True).stdout
+        ran = subprocess.run([*prefix, "-c", _PROBE], capture_output=True, text=True,
+                             encoding="utf-8", timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(f"could not run {python}: {exc}") from None
-    data = json.loads(out)
+        raise RuntimeError(f"could not run {label}: {exc}") from None
+    if ran.returncode != 0:
+        raise RuntimeError(f"could not run {label}: {(ran.stderr or '').strip()[-200:]}")
+    data = json.loads(ran.stdout)
     return {normalize(n): v for n, v in data["dists"].items()}, data["env"]
