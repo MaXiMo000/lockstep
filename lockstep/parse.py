@@ -127,6 +127,8 @@ def parse_file(path, groups=(), extras=()) -> dict:
         return _parse_pylock(text)
     if name == "pipfile.lock":
         return _parse_pipfile_lock(text)
+    if name.endswith(".json"):
+        return _parse_sbom(text, p.name)
     return parse_lockfile(text)
 
 
@@ -215,6 +217,50 @@ def _parse_uv_lock(text: str, groups=(), extras=()) -> dict:
             if dep is not None:
                 stack.append((dep, tuple(edge.get("extra", [])), False))
     return {"pinned": pinned, "unpinned": sorted(set(unpinned) - set(pinned)), "arbitrary": []}
+
+
+def _parse_sbom(text: str, label: str) -> dict:
+    """A CycloneDX or SPDX JSON SBOM: the Python packages it lists, by their
+    `pkg:pypi/name@version` package URL. Everything else in the SBOM (OS
+    packages, npm, the application itself) is not this check's business."""
+    import json
+    from urllib.parse import unquote
+    try:
+        doc = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LockfileError(f"{label} is not valid JSON: {exc}") from exc
+    local = []
+    if doc.get("bomFormat") == "CycloneDX":
+        components = list(_walk_components(doc.get("components", [])))
+        purls = [c.get("purl") or "" for c in components]
+        # A package installed from a local path or VCS has no pkg:pypi URL --
+        # fastapi's own editable install, in cyclonedx-py's SBOM of its venv.
+        # In a Python-only SBOM it is still a package that must be there; its
+        # version has nothing on PyPI to be compared against.
+        if all(p.startswith("pkg:pypi/") for p in purls if p):
+            local = [c["name"] for c in components
+                     if not c.get("purl") and c.get("name") and c.get("type") == "library"]
+    elif "spdxVersion" in doc:
+        purls = [r.get("referenceLocator", "") for pkg in doc.get("packages", [])
+                 for r in pkg.get("externalRefs", []) if r.get("referenceType") == "purl"]
+    else:
+        raise LockfileError(f"{label} is neither a CycloneDX nor an SPDX JSON SBOM")
+    pinned = {}
+    for purl in purls:
+        if not purl.startswith("pkg:pypi/") or "@" not in purl:
+            continue
+        name, _, version = purl[len("pkg:pypi/"):].split("?")[0].split("#")[0].partition("@")
+        pinned[normalize(unquote(name))] = unquote(version)
+    if not pinned and not local:
+        raise LockfileError(f"{label} lists no Python packages (pkg:pypi/...)")
+    unpinned = sorted({normalize(n) for n in local} - set(pinned))
+    return {"pinned": pinned, "unpinned": unpinned, "arbitrary": []}
+
+
+def _walk_components(components):
+    for c in components:
+        yield c
+        yield from _walk_components(c.get("components", []))
 
 
 def _parse_pipfile_lock(text: str) -> dict:
