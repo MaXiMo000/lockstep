@@ -26,14 +26,17 @@ def _check(args) -> int:
         except RuntimeError as exc:
             sys.exit(f"lockstep: {exc}")
     else:
-        # Checking from inside: lockstep itself is installed here, and it is
-        # not drift. Its dependencies still count if the lockfile names them.
         installed = installed_packages()
-        installed.pop("lockstep-evidence", None)
     try:
         lockfile = parse_file(args.lockfile, args.group, args.extra)
     except (OSError, UnicodeDecodeError, LockfileError) as exc:
         sys.exit(f"lockstep: {exc}")
+    if not (args.python or args.image):
+        # Checking from inside: lockstep itself is installed here, and is not
+        # drift -- unless the lockfile declares it, when it is checked like
+        # any other package. Its dependencies count if the lockfile names them.
+        if "lockstep-evidence" not in set(lockfile["pinned"]) | set(lockfile.get("unpinned", ())):
+            installed.pop("lockstep-evidence", None)
     results = check_drift(lockfile, installed)
 
     if args.json:

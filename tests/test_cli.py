@@ -72,6 +72,16 @@ class TestCli(unittest.TestCase):
         self.assertNotIn("[OK]", buf.getvalue())
         self.assertIn("[--]", buf.getvalue())
 
+    def test_lockstep_itself_is_hidden_unless_the_lockfile_pins_it(self):
+        from unittest import mock
+        fake = lambda: {"lockstep-evidence": "0.4.0"}
+        for text, expect in (("", []), ("lockstep-evidence==0.4.0\n", ["matched"])):
+            self.lockfile.write_text(text)
+            buf = io.StringIO()
+            with mock.patch("lockstep.cli.installed_packages", fake), contextlib.redirect_stdout(buf):
+                main(["check", str(self.lockfile), "--json"])
+            self.assertEqual([r["status"] for r in json.loads(buf.getvalue())], expect)
+
     def test_missing_lockfile_is_a_clean_error_not_a_traceback(self):
         with self.assertRaises(SystemExit) as ctx:
             main(["check", str(self.lockfile)])  # never written
