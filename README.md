@@ -1,9 +1,12 @@
 # lockstep
 
 [![ci](https://github.com/MaXiMo000/lockstep/actions/workflows/ci.yml/badge.svg)](https://github.com/MaXiMo000/lockstep/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/lockstep-evidence)](https://pypi.org/project/lockstep-evidence/)
 
 **Does what's actually installed match the lockfile? Runtime dependency
 drift, not a commit-time CVE scan.**
+
+<p align="center"><img src="https://raw.githubusercontent.com/MaXiMo000/lockstep/main/docs/demo.svg" alt="lockstep finding a wrong version, a missing package, an undeclared package, and a file edited after install" width="100%"></p>
 
 [`carabiner`](https://github.com/MaXiMo000/carabiner)'s `deps` engine
 answers "does the lockfile *committed to this repo* have a known CVE" --
@@ -43,8 +46,8 @@ Windows machine this ran on, so not reported missing.)
 pip install lockstep-evidence   # the command it installs is `lockstep`
 ```
 
-(`lockstep` was already taken on PyPI -- same story as every sibling in
-this portfolio.)
+(`lockstep` was already taken on PyPI, so the package is `lockstep-evidence`; the command
+is still `lockstep`.)
 
 ## Use
 
@@ -193,11 +196,9 @@ other, and `pip check` costs nothing extra since it's already there.
 
 ## What this does NOT do
 
-- **Python only, via `pip`/PyPI metadata.** `carabiner`'s own `deps.py`
-  docstring makes the same call for the same reason: "the plan called for
-  pip-audit, npm audit and osv-scanner... it gets one" -- one ecosystem
-  done correctly beats three done shallowly. npm/Cargo/etc. runtime drift
-  is the same idea, applied to a different package manager; not built here.
+- **Python only, via `pip`/PyPI metadata.** One ecosystem done correctly
+  beats three done shallowly. npm/Cargo/etc. runtime drift is the same idea,
+  applied to a different package manager; not built here.
 - **No CVE data, no severity, no vulnerability database.** That's
   `carabiner`'s `deps` engine's job already, at commit time. This only
   asks "does reality match the declaration," not "is the declared version
