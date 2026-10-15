@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-10-16
 
+- Documentation: a demo of real output at the top of the README, a security policy, a changelog, and issue templates.
 - A lockfile that pins `lockstep-evidence` itself is checked like any other package instead of reported as not installed.
 
 ## 0.4.0 - 2026-10-02

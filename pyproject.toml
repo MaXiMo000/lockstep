@@ -2,7 +2,7 @@
 # "lockstep" was already taken on PyPI. The installed command stays the short name --
 # python-dateutil installs `dateutil`, this installs `lockstep`.
 name = "lockstep-evidence"
-version = "0.4.0"
+version = "0.4.1"
 description = "Does what's actually installed match the lockfile? Runtime dependency drift, not just a commit-time CVE scan."
 requires-python = ">=3.10"
 readme = "README.md"
