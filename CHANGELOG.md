@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-11-18
 
 - npm: `lockstep check package-lock.json` checks the `node_modules` beside it, by install path, with dev packages left out unless `--group dev` and optional packages never reported missing.
 
