@@ -171,11 +171,45 @@ matches.
   `cyclonedx-py` SBOM of fastapi's environment: 9/9.
 - **`poetry.lock`** isn't read directly; lockstep prints the export
   command instead: `poetry export -f requirements.txt`.
+- **`package-lock.json`** / **`npm-shrinkwrap.json`** (npm 7 and later):
+  checked against the `node_modules` beside it. See below.
 
 The lockfile must be **fully pinned**: every direct *and transitive*
 dependency, the way all of the above produce it. A hand-written
 `requirements.txt` listing only top-level packages makes every transitive
 dependency read as `extra` -- correct, technically, but noise.
+
+## npm
+
+```
+$ lockstep check package-lock.json --quiet-matched
+[--] 'node_modules/has-flag' is pinned to 4.0.0 but is not installed
+[!=] 'node_modules/ms' is pinned to 2.1.2 but 2.1.3 is installed
+[++] 'node_modules/left-pad' 1.3.0 is installed but not declared anywhere in the lockfile
+
+6/9 matched, 3 drifted
+```
+
+(Real output: an `npm install`, then a package added with `--no-save`, one
+deleted, and one edited in place.)
+
+Point it at a `package-lock.json` and it reads the `node_modules` tree
+next to it -- each package's own `package.json`, not npm's
+`node_modules/.package-lock.json`, which records what npm did rather than
+what is there now.
+
+- **Compared by install path**, not name: npm can install the same package
+  at two versions in two places, and each one is checked.
+- **Dev packages are left out** by default, the way `npm ci --omit=dev`
+  leaves them out of a deployed tree; on a dev machine they're still
+  declared, so not `extra`. `--group dev` expects them too.
+- **Optional packages** (often one platform's binary) are checked when
+  present and never reported missing.
+- **Workspaces**: each workspace's own `node_modules` is read too; linked
+  workspace packages are expected present, version unchecked.
+- `lockfileVersion` 1 (npm 6) has no install paths; lockstep says how to
+  regenerate it: `npm install --package-lock-only`.
+- `--python` and `--image` are for Python environments only.
 
 ## Not the same question as `pip check`
 
@@ -196,9 +230,8 @@ other, and `pip check` costs nothing extra since it's already there.
 
 ## What this does NOT do
 
-- **Python only, via `pip`/PyPI metadata.** One ecosystem done correctly
-  beats three done shallowly. npm/Cargo/etc. runtime drift is the same idea,
-  applied to a different package manager; not built here.
+- **Python and npm only.** Cargo, Go modules, yarn and pnpm are the same
+  idea applied to another package manager; not built here.
 - **No CVE data, no severity, no vulnerability database.** That's
   `carabiner`'s `deps` engine's job already, at commit time. This only
   asks "does reality match the declaration," not "is the declared version

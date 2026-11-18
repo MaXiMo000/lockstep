@@ -34,11 +34,14 @@ def same_version(locked: str, installed: str, arbitrary: bool = False) -> bool:
 def check_drift(lockfile: dict, installed: dict[str, str]) -> list[dict]:
     pinned = lockfile["pinned"]
     arbitrary = set(lockfile.get("arbitrary", ()))
+    optional = set(lockfile.get("optional", ()))
     results = []
 
     for name in sorted(pinned):
         locked_version = pinned[name]
         actual_version = installed.get(name)
+        if actual_version is None and name in optional:
+            continue  # optional, e.g. another platform's binary: absence is fine
         if actual_version is None:
             results.append({
                 "name": name, "status": MISSING,

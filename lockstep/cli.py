@@ -8,6 +8,7 @@ import sys
 
 from .check import EXTRA, MATCHED, MISSING, VERSION_MISMATCH, check_drift
 from .installed import installed_packages, probe, probe_image
+from .npm import installed_node_modules
 from .names import normalize
 from .parse import LockfileError, parse_file
 from .verify import verify_installed
@@ -25,13 +26,20 @@ def _check(args) -> int:
                                            else probe(args.python))
         except RuntimeError as exc:
             sys.exit(f"lockstep: {exc}")
-    else:
-        installed = installed_packages()
     try:
         lockfile = parse_file(args.lockfile, args.group, args.extra)
     except (OSError, UnicodeDecodeError, LockfileError) as exc:
         sys.exit(f"lockstep: {exc}")
-    if not (args.python or args.image):
+    if lockfile.get("ecosystem") == "npm":
+        if args.python or args.image:
+            sys.exit("lockstep: --python and --image are for Python lockfiles; "
+                     "a package-lock.json is checked against the node_modules beside it")
+        import pathlib
+        installed = installed_node_modules(pathlib.Path(args.lockfile).resolve().parent,
+                                           lockfile["workspaces"])
+    elif not (args.python or args.image):
+        installed = installed_packages()
+    if lockfile.get("ecosystem") != "npm" and not (args.python or args.image):
         # Checking from inside: lockstep itself is installed here, and is not
         # drift -- unless the lockfile declares it, when it is checked like
         # any other package. Its dependencies count if the lockfile names them.
@@ -87,9 +95,10 @@ def main(argv: list[str] | None = None) -> int:
     check_p = sub.add_parser(
         "check", help="compare this environment's installed packages against a pinned lockfile")
     check_p.add_argument("lockfile",
-                         help="uv.lock, pylock.toml, Pipfile.lock, or a requirements-style lockfile")
+                         help="uv.lock, pylock.toml, Pipfile.lock, package-lock.json, or a requirements-style lockfile")
     check_p.add_argument("--group", action="append", default=[], metavar="NAME",
-                         help="uv.lock: also expect this dependency group, e.g. dev (repeatable)")
+                         help="uv.lock: also expect this dependency group, e.g. dev (repeatable); "
+                              "package-lock.json: --group dev expects devDependencies")
     check_p.add_argument("--extra", action="append", default=[], metavar="NAME",
                          help="uv.lock: also expect the project's extra NAME (repeatable)")
     check_p.add_argument("--python", metavar="PATH",

@@ -21,6 +21,7 @@ import re
 
 from packaging.markers import InvalidMarker, Marker
 
+from . import npm
 from .names import normalize
 
 # Extras (`requests[security]`) and environment markers (`; python_version
@@ -107,8 +108,8 @@ _EXPORT_HINT = {
 
 def parse_file(path, groups=(), extras=()) -> dict:
     """Any supported lockfile, chosen by name: uv.lock, pylock.toml /
-    pylock.*.toml (PEP 751), Pipfile.lock, or anything else as
-    requirements-style text.
+    pylock.*.toml (PEP 751), Pipfile.lock, package-lock.json /
+    npm-shrinkwrap.json, or anything else as requirements-style text.
 
     poetry.lock is refused with the export command to run instead: its
     markers live on dependency edges and its groups differ by version of
@@ -127,6 +128,11 @@ def parse_file(path, groups=(), extras=()) -> dict:
         return _parse_pylock(text)
     if name == "pipfile.lock":
         return _parse_pipfile_lock(text)
+    if name in npm.LOCKFILE_NAMES:
+        try:
+            return npm.parse_package_lock(text, include_dev="dev" in groups)
+        except npm.NpmLockError as exc:
+            raise LockfileError(f"{p.name}: {exc}") from exc
     if name.endswith(".json"):
         return _parse_sbom(text, p.name)
     return parse_lockfile(text)
