@@ -39,6 +39,7 @@ jobs:
       - run: python tests/test_check.py
       - run: python tests/test_cli.py
       - run: python tests/test_verify.py
+      - run: python tests/test_npm.py
 
   package:
     # Build and install the distribution on every commit, not only at release --

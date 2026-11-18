@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- npm: `lockstep check package-lock.json` checks the `node_modules` beside it, by install path, with dev packages left out unless `--group dev` and optional packages never reported missing.
+
 ## 0.4.1 - 2026-10-16
 
 - Documentation: a demo of real output at the top of the README, a security policy, a changelog, and issue templates.
